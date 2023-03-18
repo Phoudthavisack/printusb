@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'"
+    />
+    <title>Hello World!</title>
+  </head>
+  <body>
+    <webview
+      id="foo"
+      src="http://restaurant.appzap.la/"
+      style="display: inline-flex; width: 100%; height: 100%"
+    ></webview>
+  </body>
+  <script>
+    onload = () => {
+      const webview = document.querySelector("webview");
+      const indicator = document.querySelector(".indicator");
+
+      const loadstart = () => {
+        indicator.innerText = "loading...";
+      };
+
+      const loadstop = () => {
+        indicator.innerText = "";
+      };
+
+      webview.addEventListener("did-start-loading", loadstart);
+      webview.addEventListener("did-stop-loading", loadstop);
+    };
+  </script>
+</html>

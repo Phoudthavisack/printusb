@@ -1,0 +1,41 @@
+{
+  "name": "desktop-restaurant",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder -mwl",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "build:mac": "electron-builder --mac"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^22.0.0"
+  },
+  "dependencies": {
+    "@thiagoelg/node-printer": "^0.6.2",
+    "async": "^3.2.4",
+    "body-parser": "^1.20.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "escpos": "^3.0.0-alpha.6",
+    "escpos-network": "^3.0.0-alpha.5",
+    "escpos-usb": "^3.0.0-alpha.4",
+    "express": "^4.18.2",
+    "http": "0.0.1-security",
+    "ip": "^1.1.8",
+    "ipp-printer": "^1.0.0",
+    "multer": "^1.4.5-lts.1",
+    "node-mac": "^1.0.1",
+    "node-printer": "^1.0.4",
+    "node-windows": "^1.0.0-beta.8",
+    "original-fs": "^1.2.0",
+    "printer": "^0.4.0",
+    "socket.io": "^2.3.0",
+    "uuid": "^9.0.0"
+  }
+}
