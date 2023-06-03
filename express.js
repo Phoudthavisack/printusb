@@ -12,17 +12,16 @@ require("dotenv").config();
 const app = express();
 const server = http.createServer(app);
 const escpos = require("escpos");
+const sharp = require("sharp");
 var async = require("async");
-let allQueue = [];
+let allQueue = []; // que ທັງໝົດ
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-// var q = queue({ results: [] });
 function getAppDataPath() {
   switch (process.platform) {
     case "darwin": {
       return path.join(
         process.env.HOME,
         "Library",
-        "Application",
         "appzap-desktop-restaurant"
       );
     }
@@ -33,7 +32,7 @@ function getAppDataPath() {
       return path.join(process.env.HOME, "appzap-desktop-restaurant");
     }
     default: {
-      console.log("Unsupported platform!");
+      console.error("Unsupported platform!");
       process.exit(1);
     }
   }
@@ -57,10 +56,7 @@ escpos.USB = require("escpos-usb");
 
 var q = async.queue(async function (task, callback) {
   allQueue.push(task);
-  JubRunner(task);
-  // const data = await new Promise((resolve, reject) =>
-  //   setTimeout(resolve, 5000)
-  // );
+  JobRunner();
   callback();
 }, 1);
 
@@ -85,8 +81,6 @@ const storage = multer.diskStorage({
     cb(null, appDataFilePath);
   },
   filename: function (req, file, cb) {
-    // const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    // console.log("uniqueSuffix", uniqueSuffix);
     const _id = uuid.v4();
     req.queId = _id;
     cb(null, "." + _id + "." + file.mimetype.split("/")[1]);
@@ -94,10 +88,6 @@ const storage = multer.diskStorage({
       _id: _id,
       image: "." + _id + "." + file.mimetype.split("/")[1],
     };
-
-    // q.push({ _id: _id }, function (err) {
-    //   console.log(`Add queue ${_id}`);
-    // });
   },
 });
 
@@ -121,37 +111,58 @@ app.get("/", async (req, res, next) => {
 
 app.post("/ethernet/image", upload.single("image"), function (req, res, next) {
   try {
-    const _ip = req.body.ip;
-    console.log("_ip", _ip);
-    const _port = parseInt(req.body.port);
-    const imagePath = req.file.path;
-    // const appDataFilePath = path.join(req.appDatatDirPath, imagePath);
-    const device = new escpos.Network(_ip, _port);
-    const options = { encoding: req.body.encoding || "GB18030" };
-    const printer = new escpos.Printer(device, options);
-    console.log("appDataFilePath", imagePath);
-    escpos.Image.load(imagePath, function (image) {
-      const checkTimeOut = setTimeout(() => {
-        console.log("print agrain");
-      }, 10000);
-      const printing = device.open(function () {
-        try {
-          printer
-            .beep(req.body.beep1 || 0, req.body.beep2 || 0) // .beep(1,9);
-            .align("ct")
-            .image(image, "d24")
-            .then(() => {
-              printer.cut().close();
-              fs.unlinkSync(imagePath, (err) => {
-                console.log(`File not found ${imagePath}`);
-              });
-              clearTimeout(checkTimeOut);
+    // TODO: add ethernet image to que
+
+    const _run = async (req) => {
+      const imagePath = req.file.path;
+      await resizeImage(imagePath, req.body.paper || 80);
+      return new Promise((resolve, reject) => {
+        const _ip = req.body.ip;
+        const _port = parseInt(req.body.port);
+        const device = new escpos.Network(_ip, _port);
+        const options = { encoding: req.body.encoding || "GB18030" };
+        const printer = new escpos.Printer(device, options);
+
+        escpos.Image.load(
+          imagePath,
+          function (image) {
+            device.open(function () {
+              try {
+                // printer.cut().close();
+                printer
+                  .beep(req.body.beep1 || 0, req.body.beep2 || 0) // .beep(1,9);
+                  .align("ct")
+                  .image(image, "d24")
+                  .then(() => {
+                    printer.cut().close();
+                    fs.unlinkSync(imagePath, (err) => {
+                      // console.log(`File not found ${imagePath}`);
+                    });
+                    resolve();
+                  })
+                  .catch((err) => {
+                    console.error(err.message, "1679244200033");
+                    reject(err);
+                  });
+              } catch (err) {
+                printer.close();
+                console.error(err.message, "1679244242472");
+                reject(err);
+              }
             });
-        } catch (err) {
-          console.log(err);
-        }
+            // printing.timeout = 10000;
+          },
+          (err) => {
+            console.log(err.message, "1679244295659");
+            reject(err);
+          }
+        );
       });
-      printing.timeout = 10000;
+    };
+
+    // TODO: add to que
+    q.push({ _id: req.queId, _run: _run, _req: req }, function (err) {
+      console.log(`Add queue ${req.queId}`);
     });
     return res.status(200).json({
       message: "Success!",
@@ -177,7 +188,7 @@ app.post("/ethernet/text", async (req, res, next) => {
     const printer = new escpos.Printer(device, options);
     const printing = device.open(async function (error) {
       try {
-        printer.beep(1, 9).encode("UTF-8").text(text).cut(true, 5).close();
+        printer.beep(1, 9).encode("UTF-8").text(text).cut(true, 5);
       } catch {
         printer.close();
       }
@@ -199,89 +210,67 @@ app.post("/usb/image", upload.single("image"), function (req, res, next) {
   try {
     const _run = async (req) => {
       const imagePath = req.file.path;
-      // const appDataFilePath = path.join(req.appDatatDirPath, imagePath);
+      await resizeImage(imagePath, req.body.paper || 80);
 
       return new Promise((resolve, reject) => {
         try {
           const { config, beep1, beep2 } = req.body;
-          const _port = parseInt(req.body.port);
-          console.log("imagePath=w", imagePath);
-          const allDeviceUSB = escpos.USB.findPrinter();
-          // if (allDeviceUSB.length == 0) {
-          //   resolve();
-          // }
           const device = new escpos.USB();
-          console.log("device");
-          const options = config || { encoding: "GB18030" /* default */ };
-          console.log("options");
-          const printer = new escpos.Printer(device, options);
-          console.log("printer");
-          console.log("imagePath===>", imagePath);
-          escpos.Image.load(imagePath, function (image) {
-            console.log("image.length", image.length);
-            console.log("escpos.Image.load");
-            let checkTimeOut;
-            checkTimeOut = setTimeout(() => {
-              console.log("print agrain");
-              resolve();
-            }, 10000);
-            console.log("checkTimeOut");
 
+          const options = config || { encoding: "GB18030" /* default */ };
+          const printer = new escpos.Printer(device, options);
+          // printer.close();
+          escpos.Image.load(imagePath, function (image) {
+            // 201 * 7 / 2.54
             device.open(
               function () {
-                device.on("data", async (buffer) => {
-                  await delay(buffer.length * 0.05);
-                  resolve();
-                  // device.close();
-                });
                 try {
-                  console.log("device.open");
                   printer
                     .beep(beep1 || 0, beep2 || 0) // .beep(1,9);
                     .align("ct")
                     .image(image, "d24")
                     .then(() => {
                       printer.cut().close();
-                      // printer.close();
-                      console.log("first");
                       fs.unlinkSync(imagePath, (err) => {
                         if (!err) {
-                          console.log(`File not found ${imagePath}`);
+                          // console.log(`File not found ${imagePath}`);
                         }
                       });
-                      clearTimeout(checkTimeOut);
-                      console.log("clearTimeout");
+                      resolve();
+                    })
+                    .catch((err) => {
+                      if (err) {
+                        console.log(err.message, "1679239979985");
+                        reject(err);
+                      }
                     });
                 } catch (err) {
-                  console.log(err);
+                  console.log(err.message, "1679240017005");
                 }
               },
-              (err) => {
-                console.log("device.open err");
+              (err, device) => {
+                console.error(err.message, "1679240021790");
+                reject(err);
               }
             );
           });
-          // resolve();
         } catch (err) {
-          console.log(err);
-          fs.unlinkSync(imagePath, (err) => {
-            if (!err) {
-              console.log(`File not found ${imagePath}`);
-            }
-          });
-          reject();
+          console.error(err.message, "1679240026937");
+          reject(err);
         }
       });
     };
 
+    // TODO: add to que
     q.push({ _id: req.queId, _run: _run, _req: req }, function (err) {
       console.log(`Add queue ${req.queId}`);
     });
+
     return res.status(200).json({
       message: "Success!",
     });
   } catch (err) {
-    console.log(err);
+    console.error(err.message, "1679241988064");
     return res.status(500).json({
       message: "Internal Server Error",
       code: "INTERNAL_SERVER_ERROR",
@@ -299,7 +288,7 @@ app.post("/usb/text", async (req, res, next) => {
     const printer = new escpos.Printer(device, options);
     const printing = device.open(async function (error) {
       // device.write('! U1 setvar "wifi.ssid" "your-ssid"\r\n');
-      device.write('! U1 setvar "wifi.ssid"ຫກດ "your-ssid"\r\n');
+      // device.write('! U1 setvar "wifi.ssid"ຫກດ "your-ssid"\r\n');
       try {
         printer
           .beep(beep1 || 0, beep2 || 0)
@@ -316,7 +305,7 @@ app.post("/usb/text", async (req, res, next) => {
       message: "Success!",
     });
   } catch (err) {
-    console.log(err);
+    // console.log(err);
     return res.status(500).json({
       message: "Internal Server Error",
       code: "INTERNAL_SERVER_ERROR",
@@ -343,66 +332,99 @@ io.on("connection", (socket) => {
 // que
 let working = [];
 let isWorking = false;
-// TODO: Query managment
-const JubRunner = async (newQ) => {
+// DONE: Query managment
+const JobRunner = async () => {
   try {
-    console.log("all queue ", allQueue.length);
-    if (newQ) {
-      // console.log("Okey. I see queue", newQ._id);
-      // console.log("Your queue is ", allQueue.length);
+    if (isWorking || working?.length > 0) {
+      return;
     }
     // Add allQueue to working
     if (working.length == 0 && allQueue.length > 0) {
       working = [...allQueue];
+      allQueue = [];
     }
 
     if (working.length > 0 && !isWorking) {
       // Working
       isWorking = true;
-      console.log("runnnnning", working.length);
-      let success = [];
+      // console.log("runnnnning", working.length);
+      let success = []; // que ທີເຮັດວຽກສຳເລັດ
       console.time();
       for (let que of working) {
         let timer;
-        // timer = setTimeout(() => {
-        //   console.log("Success", que._id);
-        // }, 10000);
+        let _error = false;
         await que
           ._run(que._req)
           .then((data) => {
-            console.log("--then");
+            console.log("Success", que._id);
+            success.push(que);
             // clearTimeout(timer);
-            // timer = delay(400);
+            // timer = delay(5000);
           })
           .catch((err) => {
             if (err) {
-              console.log(err);
+              _error = true;
+              console.error(err.message, "1679240043630");
             }
           });
-        // timer = await delay(10000);
-        success.push(que);
-        console.log("_okey", working.length);
+        if (_error) {
+          allQueue.push(que); //add to que again
+          await delay(5000);
+        } else {
+          await delay(1200);
+        }
       }
       console.timeEnd();
       working = [];
-      isWorking = false;
-      allQueue = allQueue.filter((e) => {
-        const _find = success.find((v) => v._id == e._id);
-        if (!_find) {
-          return true;
-        } else {
-          return false;
-        }
-      });
-      // isWorking = false;
+      // allQueue = allQueue.filter((e) => {
+      //   const _find = success.find((v) => v._id == e._id);
+      //   if (!_find) {
+      //     return true;
+      //   } else {
+      //     return false;
+      //   }
+      // });
       if (allQueue.length > 0) {
-        JubRunner();
+        isWorking = false;
+        return JobRunner();
+      } else {
+        isWorking = false;
       }
     }
+
+    return;
   } catch (err) {
-    console.log(err);
+    console.error(err.message, "1679241803577");
   }
 };
+
+// Function
+async function resizeImage(imagePath, paperRoll = 80) {
+  const image = new sharp(imagePath); // path to the stored image
+  const imageAfterResize = await image
+    .metadata() // get image metadata for size
+    .then(function (metadata) {
+      if ((paperRoll = 80)) {
+        return image.resize({ width: 576 }).toBuffer(); // resize if too big
+      } else if ((paperRoll = 58)) {
+        return image.resize({ width: 384 }).toBuffer(); // resize if too big
+      } else {
+        return image.toBuffer();
+      }
+    });
+  function writeToFile(data, fileName) {
+    return new Promise((resolve, reject) => {
+      try {
+        fs.writeFileSync(fileName, data);
+        resolve("Data written to file successfully.");
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+  await writeToFile(imageAfterResize, imagePath);
+}
+
 // -----------
 const port = process.env.PORT || 9150;
 server.listen(port, () => {
@@ -413,3 +435,10 @@ server.listen(port, () => {
   console.log(`--------------------------------------------------`);
   console.log(`#Event -->`);
 });
+
+exports.closeServer = () => {
+  server.close((err) => {
+    console.log("server closed");
+    process.exit(err ? 1 : 0);
+  });
+};
