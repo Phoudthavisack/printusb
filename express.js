@@ -404,12 +404,12 @@ async function resizeImage(imagePath, paperRoll = 80) {
   const imageAfterResize = await image
     .metadata() // get image metadata for size
     .then(function (metadata) {
-      if ((paperRoll = 80)) {
+      if ((paperRoll == 80)) {
         return image.resize({ width: 576 }).toBuffer(); // resize if too big
-      } else if ((paperRoll = 58)) {
+      } else if ((paperRoll == 58)) {
         return image.resize({ width: 384 }).toBuffer(); // resize if too big
       } else {
-        return image.toBuffer();
+        return image.resize({ width: 576 }).toBuffer(); // defualt
       }
     });
   function writeToFile(data, fileName) {
