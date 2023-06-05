@@ -38,7 +38,6 @@
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
     "electron-updater": "^5.3.0",
-    "esc-pos-encoder": "^2.0.1",
     "escpos": "^3.0.0-alpha.6",
     "escpos-network": "^3.0.0-alpha.5",
     "escpos-usb": "^3.0.0-alpha.4",
@@ -47,10 +46,8 @@
     "ip": "^1.1.8",
     "multer": "^1.4.5-lts.1",
     "original-fs": "^1.2.0",
-    "resize-image-buffer": "^1.0.0",
     "sharp": "^0.32.1",
     "socket.io": "^2.3.0",
-    "update-electron-app": "^2.0.1",
     "uuid": "^9.0.0"
   }
 }
