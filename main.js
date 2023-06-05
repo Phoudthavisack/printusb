@@ -1,4 +1,3 @@
-require("update-electron-app")();
 const { app, BrowserWindow, dialog } = require("electron");
 const { closeServer } = require("./express");
 
